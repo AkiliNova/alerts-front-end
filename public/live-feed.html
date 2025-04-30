@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Feed - Surveillance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/shared/styles.css">
+    <style>
+        .camera-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .video-feed {
+            width: 100%;
+            max-width: 800px;
+            border-radius: 8px;
+            margin: 0 auto;
+            display: block;
+        }
+
+        .camera-controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .detection-box {
+            position: absolute;
+            border: 2px solid red;
+            background-color: rgba(255, 0, 0, 0.2);
+            pointer-events: none;
+        }
+
+        .detection-label {
+            position: absolute;
+            background-color: red;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            top: -20px;
+            left: 0;
+        }
+
+        #detectionCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .detection-stats {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .detection-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .detection-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Include shared navigation -->
+    <div id="nav-placeholder"></div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-camera-video me-2"></i>Live Feed</h2>
+            <span id="detection-status" class="status-badge bg-success">
+                <i class="bi bi-eye me-2"></i>Detection Active
+            </span>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="camera-container">
+                    <div class="video-wrapper">
+                        <video id="videoFeed" class="video-feed" autoplay muted></video>
+                        <canvas id="detectionCanvas"></canvas>
+                    </div>
+                    <div class="camera-controls">
+                        <button class="btn btn-primary me-2" id="startCamera">
+                            <i class="bi bi-play-circle me-2"></i>Start Camera
+                        </button>
+                        <button class="btn btn-danger me-2" id="stopCamera">
+                            <i class="bi bi-stop-circle me-2"></i>Stop Camera
+                        </button>
+                        <button class="btn btn-success" id="toggleDetection">
+                            <i class="bi bi-eye me-2"></i>Toggle Detection
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="detection-stats">
+                    <h4><i class="bi bi-list-check me-2"></i>Recent Detections</h4>
+                    <div class="detection-list" id="detectionList">
+                        <!-- Detection items will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script>
+        // Load shared navigation
+        $(function(){
+            $("#nav-placeholder").load("/shared/nav.html", function() {
+                if (socket && socket.connected) {
+                    window.updateNavConnectionStatus(true);
+                }
+            });
+        });
+
+        let socket;
+        let video;
+        let model;
+        let isDetecting = false;
+        let detectionInterval;
+
+        // Connect to WebSocket
+        function connectSocket() {
+            socket = io("http://localhost:3000");
+            
+            socket.on("connect", () => {
+                window.updateNavConnectionStatus(true);
+            });
+
+            socket.on("disconnect", () => {
+                window.updateNavConnectionStatus(false);
+            });
+        }
+
+        async function loadModel() {
+            try {
+                model = await cocoSsd.load();
+                console.log('Model loaded successfully');
+                document.getElementById('toggleDetection').disabled = false;
+            } catch (error) {
+                console.error('Error loading model:', error);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 800,
+                        height: 600,
+                        facingMode: 'environment' 
+                    } 
+                });
+                video = document.getElementById('videoFeed');
+                video.srcObject = stream;
+                
+                // Set up canvas
+                const canvas = document.getElementById('detectionCanvas');
+                canvas.width = video.width;
+                canvas.height = video.height;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+            }
+        }
+
+        function stopCamera() {
+            const video = document.getElementById('videoFeed');
+            const stream = video.srcObject;
+            if (stream) {
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            stopDetection();
+        }
+
+        async function detect() {
+            if (!model || !video || !isDetecting) return;
+
+            try {
+                const predictions = await model.detect(video);
+                drawDetections(predictions);
+                updateDetectionList(predictions);
+
+                // Send detections to server
+                if (predictions.length > 0) {
+                    predictions.forEach(pred => {
+                        socket.emit('detection', {
+                            objectType: pred.class,
+                            confidence: pred.score,
+                            location: 'Camera 1',
+                            timestamp: new Date()
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+        }
+
+        function drawDetections(predictions) {
+            const canvas = document.getElementById('detectionCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            predictions.forEach(prediction => {
+                // Draw bounding box
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(...prediction.bbox);
+
+                // Draw label
+                ctx.fillStyle = 'red';
+                ctx.fillRect(prediction.bbox[0], prediction.bbox[1] - 20, 
+                    prediction.class.length * 8 + 20, 20);
+                ctx.fillStyle = 'white';
+                ctx.fillText(
+                    `${prediction.class} ${Math.round(prediction.score * 100)}%`,
+                    prediction.bbox[0] + 5, prediction.bbox[1] - 5
+                );
+            });
+        }
+
+        function updateDetectionList(predictions) {
+            const list = document.getElementById('detectionList');
+            predictions.forEach(pred => {
+                const item = document.createElement('div');
+                item.className = 'detection-item';
+                item.innerHTML = `
+                    <div>
+                        <strong>${pred.class}</strong>
+                        <small class="text-muted ms-2">${Math.round(pred.score * 100)}% confidence</small>
+                    </div>
+                    <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                `;
+                list.insertBefore(item, list.firstChild);
+
+                // Keep only last 10 detections
+                if (list.children.length > 10) {
+                    list.removeChild(list.lastChild);
+                }
+            });
+        }
+
+        function startDetection() {
+            isDetecting = true;
+            detectionInterval = setInterval(detect, 100);
+            document.getElementById('detection-status').className = 'status-badge bg-success';
+            document.getElementById('detection-status').innerHTML = '<i class="bi bi-eye me-2"></i>Detection Active';
+        }
+
+        function stopDetection() {
+            isDetecting = false;
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+            }
+            document.getElementById('detection-status').className = 'status-badge bg-secondary';
+            document.getElementById('detection-status').innerHTML = '<i class="bi bi-eye-slash me-2"></i>Detection Inactive';
+        }
+
+        // Event Listeners
+        document.getElementById('startCamera').addEventListener('click', startCamera);
+        document.getElementById('stopCamera').addEventListener('click', stopCamera);
+        document.getElementById('toggleDetection').addEventListener('click', () => {
+            if (isDetecting) {
+                stopDetection();
+            } else {
+                startDetection();
+            }
+        });
+
+        // Initialize
+        window.onload = async () => {
+            connectSocket();
+            await loadModel();
+            document.getElementById('toggleDetection').disabled = true;
+        };
+    </script>
+</body>
+</html> 

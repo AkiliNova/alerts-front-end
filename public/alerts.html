@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerts - Surveillance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/shared/styles.css">
+    <style>
+        /* Alert page specific styles */
+        .alert-filters {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .alert-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #dc3545;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .alert-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .alert-card.high {
+            border-left-color: #dc3545;
+        }
+
+        .alert-card.medium {
+            border-left-color: #ffc107;
+        }
+
+        .alert-card.low {
+            border-left-color: #0dcaf0;
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .alert-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .alert-meta {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .alert-location {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .alert-actions {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .status-badge {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 1000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #alerts-list {
+            min-height: 400px;
+        }
+
+        .load-more {
+            padding: 20px;
+            text-align: center;
+            background: white;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .no-alerts {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 10px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- Include shared navigation -->
+    <div id="nav-placeholder"></div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-bell me-2"></i>Alert Management</h2>
+            <span id="real-time-status" class="status-badge bg-success">
+                <i class="bi bi-broadcast me-2"></i>Real-time updates active
+            </span>
+        </div>
+
+        <!-- Filters -->
+        <div class="alert-filters">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-exclamation-triangle me-2"></i>Severity</label>
+                    <select class="form-select" id="severity-filter">
+                        <option value="">All Objects</option>
+                        <option value="Weapon">Weapons</option>
+                        <option value="Suspicious Package">Suspicious Packages</option>
+                        <option value="Unknown Object">Unknown Objects</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-geo-alt me-2"></i>Location</label>
+                    <select class="form-select" id="location-filter">
+                        <option value="">All Locations</option>
+                        <option value="entrance">Main Entrance</option>
+                        <option value="hallway">Hallways</option>
+                        <option value="classroom">Classrooms</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-calendar me-2"></i>Date Range</label>
+                    <input type="date" class="form-control" id="date-filter">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-search me-2"></i>Search</label>
+                    <input type="text" class="form-control" id="search-filter" placeholder="Search alerts...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Summary -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="alert-filters text-center">
+                    <h3 class="text-danger mb-0" id="high-priority-count">0</h3>
+                    <small class="text-muted">High Priority</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert-filters text-center">
+                    <h3 class="text-warning mb-0" id="medium-priority-count">0</h3>
+                    <small class="text-muted">Medium Priority</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert-filters text-center">
+                    <h3 class="text-info mb-0" id="low-priority-count">0</h3>
+                    <small class="text-muted">Low Priority</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert-filters text-center">
+                    <h3 class="text-primary mb-0" id="total-alerts-count">0</h3>
+                    <small class="text-muted">Total Alerts</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts List -->
+        <div id="alerts-list">
+            <!-- Alerts will be inserted here -->
+        </div>
+
+        <!-- Load More -->
+        <div class="load-more">
+            <button class="btn btn-primary" id="load-more">
+                <i class="bi bi-arrow-down-circle me-2"></i>Load More Alerts
+            </button>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Load shared navigation
+        $(function(){
+            $("#nav-placeholder").load("/shared/nav.html", function() {
+                // After nav is loaded, update its connection status if socket exists
+                if (socket && socket.connected) {
+                    window.updateNavConnectionStatus(true);
+                }
+            });
+        });
+
+        let socket;
+        let alertsData = [];
+        let priorityCounts = {
+            high: 0,
+            medium: 0,
+            low: 0,
+            total: 0
+        };
+
+        function connectSocket() {
+            socket = io("http://localhost:3000");
+
+            socket.on("connect", () => {
+                // Update both status indicators
+                window.updateNavConnectionStatus(true);
+                document.getElementById('real-time-status').classList.remove('bg-danger');
+                document.getElementById('real-time-status').classList.add('bg-success');
+                document.getElementById('real-time-status').innerHTML = '<i class="bi bi-broadcast me-2"></i>Real-time updates active';
+            });
+
+            socket.on("alert", (alertData) => {
+                addNewAlert(alertData);
+                updatePriorityCounts(alertData.severity);
+            });
+
+            socket.on("disconnect", () => {
+                // Update both status indicators
+                window.updateNavConnectionStatus(false);
+                document.getElementById('real-time-status').classList.remove('bg-success');
+                document.getElementById('real-time-status').classList.add('bg-danger');
+                document.getElementById('real-time-status').innerHTML = '<i class="bi bi-broadcast me-2"></i>Connection lost';
+            });
+        }
+
+        function updatePriorityCounts(severity) {
+            priorityCounts[severity]++;
+            priorityCounts.total++;
+            
+            document.getElementById('high-priority-count').textContent = priorityCounts.high;
+            document.getElementById('medium-priority-count').textContent = priorityCounts.medium;
+            document.getElementById('low-priority-count').textContent = priorityCounts.low;
+            document.getElementById('total-alerts-count').textContent = priorityCounts.total;
+        }
+
+        function createAlertElement(alert) {
+            const div = document.createElement('div');
+            const severity = getSeverityByObjectType(alert.objectType);
+            div.className = `alert-card ${severity}`;
+            
+            const timestamp = new Date(alert.timestamp || alert.createdAt).toLocaleString();
+            
+            // Create a more descriptive message based on the object type
+            const alertMessage = alert.objectType 
+                ? `${alert.objectType} Detected`
+                : 'Unknown Object Detected';
+            
+            div.innerHTML = `
+                <div class="alert-header">
+                    <div>
+                        <div class="alert-title">
+                            <i class="bi bi-shield-exclamation"></i>
+                            ${alertMessage}
+                        </div>
+                        <div class="alert-meta">
+                            <span class="alert-location">
+                                <i class="bi bi-geo-alt"></i>
+                                ${alert.location || "Unknown Location"}
+                            </span>
+                            <span class="ms-2">
+                                <i class="bi bi-clock"></i>
+                                ${timestamp}
+                            </span>
+                        </div>
+                    </div>
+                    <span class="badge bg-${getSeverityColorByObjectType(alert.objectType)}">
+                        ${severity.toUpperCase()} PRIORITY
+                    </span>
+                </div>
+                <div class="alert-actions">
+                    <button class="btn btn-sm btn-outline-primary me-2">
+                        <i class="bi bi-camera-video"></i> View Footage
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary me-2" onclick="showAlertDetails(${JSON.stringify(alert).replace(/"/g, '&quot;')})">
+                        <i class="bi bi-file-text"></i> Details
+                    </button>
+                    <button class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-check-circle"></i> Mark as Reviewed
+                    </button>
+                </div>
+            `;
+            
+            return div;
+        }
+
+        function addNewAlert(alert, addToData = true) {
+            const alertsContainer = document.getElementById("alerts-list");
+            const alertElement = createAlertElement(alert);
+            
+            if (alertsContainer.children.length === 0) {
+                alertsContainer.appendChild(alertElement);
+            } else {
+                alertsContainer.insertBefore(alertElement, alertsContainer.firstChild);
+            }
+            
+            if (addToData) {
+                alertsData.unshift(alert);
+            }
+        }
+
+        function getSeverityColor(severity) {
+            switch(severity) {
+                case 'high': return 'danger';
+                case 'medium': return 'warning';
+                case 'low': return 'info';
+                default: return 'secondary';
+            }
+        }
+
+        function getSeverityByObjectType(objectType) {
+            if (!objectType) return 'medium';
+            
+            const highRiskObjects = ['Weapon', 'Knife', 'Gun'];
+            const mediumRiskObjects = ['Suspicious Package', 'Unknown Object'];
+            
+            objectType = objectType.toLowerCase();
+            
+            if (highRiskObjects.some(obj => objectType.includes(obj.toLowerCase()))) return 'high';
+            if (mediumRiskObjects.some(obj => objectType.includes(obj.toLowerCase()))) return 'medium';
+            return 'low';
+        }
+
+        function getSeverityColorByObjectType(objectType) {
+            const severity = getSeverityByObjectType(objectType);
+            switch(severity) {
+                case 'high': return 'danger';
+                case 'medium': return 'warning';
+                case 'low': return 'info';
+                default: return 'secondary';
+            }
+        }
+
+        // Filter functionality
+        document.getElementById('search-filter').addEventListener('input', filterAlerts);
+        document.getElementById('severity-filter').addEventListener('change', filterAlerts);
+        document.getElementById('location-filter').addEventListener('change', filterAlerts);
+        document.getElementById('date-filter').addEventListener('change', filterAlerts);
+
+        async function filterAlerts() {
+            const searchTerm = document.getElementById('search-filter').value;
+            const objectType = document.getElementById('severity-filter').value;
+            const location = document.getElementById('location-filter').value;
+            const date = document.getElementById('date-filter').value;
+
+            try {
+                const queryParams = new URLSearchParams({
+                    ...(searchTerm && { search: searchTerm }),
+                    ...(objectType && { objectType }),
+                    ...(location && { location }),
+                    ...(date && { date }),
+                });
+
+                const response = await fetch(`/alerts?${queryParams}`);
+                const data = await response.json();
+                
+                displayFilteredAlerts(data.alerts);
+                
+                // Update statistics
+                updateStatistics(data.alerts);
+                
+                // Update load more button
+                document.getElementById('load-more').style.display = 
+                    data.page < data.pages ? 'block' : 'none';
+                currentPage = 1;
+            } catch (error) {
+                console.error('Error filtering alerts:', error);
+            }
+        }
+
+        function displayFilteredAlerts(alerts) {
+            const container = document.getElementById('alerts-list');
+            container.innerHTML = '';
+            
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="no-alerts">
+                        <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                        <h4>No alerts found</h4>
+                        <p class="text-muted">Try adjusting your filters or wait for new alerts</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            alerts.forEach(alert => {
+                container.appendChild(createAlertElement(alert));
+            });
+        }
+
+        // Add this after the existing socket connection code
+        async function loadInitialAlerts() {
+            try {
+                const response = await fetch('/alerts?limit=10');
+                const data = await response.json();
+                
+                // Reset counts
+                priorityCounts = {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                    total: data.total
+                };
+
+                // Display alerts and update counts
+                data.alerts.forEach(alert => {
+                    addNewAlert(alert, false); // false means don't add to alertsData
+                    if (alert.severity) {
+                        priorityCounts[alert.severity]++;
+                    }
+                });
+
+                updatePriorityCounts();
+
+                // Update load more button visibility
+                document.getElementById('load-more').style.display = 
+                    data.page < data.pages ? 'block' : 'none';
+
+            } catch (error) {
+                console.error('Error loading alerts:', error);
+            }
+        }
+
+        // Add load more functionality
+        let currentPage = 1;
+        document.getElementById('load-more').addEventListener('click', async () => {
+            currentPage++;
+            try {
+                const response = await fetch(`/alerts?page=${currentPage}&limit=10`);
+                const data = await response.json();
+                
+                data.alerts.forEach(alert => {
+                    const alertElement = createAlertElement(alert);
+                    document.getElementById("alerts-list").appendChild(alertElement);
+                    alertsData.push(alert);
+                });
+
+                // Hide load more button if no more pages
+                if (currentPage >= data.pages) {
+                    document.getElementById('load-more').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading more alerts:', error);
+            }
+        });
+
+        // Update initialization
+        window.onload = async () => {
+            await connectSocket();
+            await loadInitialAlerts();
+            
+            // Update nav connection status after a short delay to ensure nav is loaded
+            setTimeout(() => {
+                if (socket && socket.connected) {
+                    window.updateNavConnectionStatus(true);
+                }
+            }, 100);
+        };
+
+        // Add function to update statistics
+        function updateStatistics(alerts) {
+            const stats = {
+                high: 0,
+                medium: 0,
+                low: 0,
+                total: alerts.length
+            };
+
+            alerts.forEach(alert => {
+                const severity = getSeverityByObjectType(alert.objectType);
+                stats[severity]++;
+            });
+
+            document.getElementById('high-priority-count').textContent = stats.high;
+            document.getElementById('medium-priority-count').textContent = stats.medium;
+            document.getElementById('low-priority-count').textContent = stats.low;
+            document.getElementById('total-alerts-count').textContent = stats.total;
+        }
+
+        // Add a function to show alert details
+        function showAlertDetails(alert) {
+            // Create a modal with the alert details
+            const detailsHtml = `
+                <div class="modal fade" id="alertDetailsModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Alert Details</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Object Type</dt>
+                                    <dd class="col-sm-8">${alert.objectType || 'Unknown'}</dd>
+                                    
+                                    <dt class="col-sm-4">Location</dt>
+                                    <dd class="col-sm-8">${alert.location || 'Unknown'}</dd>
+                                    
+                                    <dt class="col-sm-4">Time Detected</dt>
+                                    <dd class="col-sm-8">${new Date(alert.timestamp || alert.createdAt).toLocaleString()}</dd>
+                                    
+                                    <dt class="col-sm-4">Priority</dt>
+                                    <dd class="col-sm-8">
+                                        <span class="badge bg-${getSeverityColorByObjectType(alert.objectType)}">
+                                            ${getSeverityByObjectType(alert.objectType).toUpperCase()}
+                                        </span>
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove any existing modal
+            const existingModal = document.getElementById('alertDetailsModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Add the modal to the document
+            document.body.insertAdjacentHTML('beforeend', detailsHtml);
+
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('alertDetailsModal'));
+            modal.show();
+        }
+    </script>
+</body>
+</html> 

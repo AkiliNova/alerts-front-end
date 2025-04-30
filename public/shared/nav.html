@@ -1,0 +1,85 @@
+<!-- Sidebar Navigation -->
+<nav class="sidebar">
+    <div class="px-4 mb-4">
+        <h4>🎥 Surveillance</h4>
+    </div>
+    <ul class="nav flex-column">
+        <li class="nav-item">
+            <a class="nav-link" href="/websocket-test.html" id="nav-dashboard">
+                <i class="bi bi-speedometer2"></i>
+                Dashboard
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="/live-feed.html" id="nav-live">
+                <i class="bi bi-camera-video"></i>
+                Live Feed
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="/alerts.html" id="nav-alerts">
+                <i class="bi bi-bell"></i>
+                Alerts
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="nav-face">
+                <i class="bi bi-people"></i>
+                Face Detection
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="nav-object">
+                <i class="bi bi-box"></i>
+                Object Detection
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="nav-settings">
+                <i class="bi bi-gear"></i>
+                Settings
+            </a>
+        </li>
+    </ul>
+</nav>
+
+<!-- Top Navigation -->
+<nav class="top-nav">
+    <div id="connection-status" class="connection-status disconnected">
+        Disconnected
+    </div>
+    <div class="user-profile">
+        <div class="user-avatar">
+            <i class="bi bi-person"></i>
+        </div>
+        <span>Admin User</span>
+    </div>
+</nav>
+
+<script>
+    // Set active nav item based on current page
+    function setActiveNav() {
+        const path = window.location.pathname;
+        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+        
+        if (path.includes('alerts.html')) {
+            document.getElementById('nav-alerts').classList.add('active');
+        } else if (path.includes('websocket-test.html') || path === '/') {
+            document.getElementById('nav-dashboard').classList.add('active');
+        } else if (path.includes('live-feed.html')) {
+            document.getElementById('nav-live').classList.add('active');
+        }
+    }
+
+    // Add global function to update connection status
+    window.updateNavConnectionStatus = function(connected) {
+        const statusElement = document.getElementById('connection-status');
+        if (statusElement) {
+            statusElement.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
+            statusElement.textContent = connected ? 'Connected' : 'Disconnected';
+        }
+    };
+
+    // Call when DOM is loaded
+    document.addEventListener('DOMContentLoaded', setActiveNav);
+</script> 
