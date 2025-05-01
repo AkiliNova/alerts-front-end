@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Surveillance - Login</title>
+    <link rel="stylesheet" href="/shared/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="/shared/auth.js"></script>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>School Surveillance System</h1>
+            <p>Please sign in to continue</p>
+        </div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="Enter your password">
+            </div>
+            <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
+            <div id="errorMessage" class="error-message"></div>
+            <div id="successMessage" class="success-message"></div>
+        </form>
+    </div>
+    <script>
+        // Redirect to main page if already logged in
+        if (isAuthenticated()) {
+            window.location.href = '/live-feed.html';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+            
+            // Reset messages
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+            
+            // Get form data
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                // Add loading state
+                submitBtn.classList.add('loading');
+                submitBtn.disabled = true;
+                
+                // Make API request
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Login failed');
+                }
+                
+                // Store token
+                localStorage.setItem('token', data.token);
+                
+                // Show success message
+                successMessage.textContent = 'Login successful! Redirecting...';
+                successMessage.style.display = 'block';
+                
+                // Redirect to main page
+                setTimeout(() => {
+                    window.location.href = '/live-feed.html';
+                }, 1000);
+                
+            } catch (error) {
+                // Show error message
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+            } finally {
+                // Remove loading state
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html> 
