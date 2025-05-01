@@ -6,6 +6,8 @@
     <title>Surveillance Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/shared/styles.css">
+    <script src="/shared/auth.js"></script>
     <style>
         body { 
             background-color: #f8f9fa;
@@ -137,63 +139,15 @@
     </style>
 </head>
 <body>
-    <!-- Sidebar Navigation -->
-    <nav class="sidebar">
-        <div class="px-4 mb-4">
-            <h4>🎥 Surveillance</h4>
-        </div>
-        <ul class="nav flex-column">
-            <li class="nav-item">
-                <a class="nav-link active" href="#">
-                    <i class="bi bi-speedometer2"></i>
-                    Dashboard
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="#">
-                    <i class="bi bi-camera-video"></i>
-                    Live Feed
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/alerts.html">
-                    <i class="bi bi-bell"></i>
-                    Alerts
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="#">
-                    <i class="bi bi-people"></i>
-                    Face Detection
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="#">
-                    <i class="bi bi-box"></i>
-                    Object Detection
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="#">
-                    <i class="bi bi-gear"></i>
-                    Settings
-                </a>
-            </li>
-        </ul>
-    </nav>
+    <script>
+        // Check authentication before loading page
+        if (!requireAuth()) {
+            throw new Error('Authentication required');
+        }
+    </script>
 
-    <!-- Top Navigation -->
-    <nav class="top-nav">
-        <div id="connection-status" class="connection-status disconnected">
-            Disconnected
-        </div>
-        <div class="user-profile">
-            <div class="user-avatar">
-                <i class="bi bi-person"></i>
-            </div>
-            <span>Admin User</span>
-        </div>
-    </nav>
+    <!-- Load shared navigation -->
+    <div id="nav-placeholder"></div>
 
     <!-- Main Content -->
     <div class="main-content">
@@ -203,30 +157,30 @@
             <!-- Stats Cards -->
             <div class="col-md-3">
                 <div class="dashboard-card stats-card">
+                    <i class="bi bi-shield-exclamation fs-3 text-danger mb-2"></i>
+                    <div class="stats-number" id="high-priority-count">0</div>
+                    <div>High Priority</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="dashboard-card stats-card">
+                    <i class="bi bi-shield-fill fs-3 text-warning mb-2"></i>
+                    <div class="stats-number" id="medium-priority-count">0</div>
+                    <div>Medium Priority</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="dashboard-card stats-card">
+                    <i class="bi bi-shield fs-3 text-info mb-2"></i>
+                    <div class="stats-number" id="low-priority-count">0</div>
+                    <div>Low Priority</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="dashboard-card stats-card">
                     <i class="bi bi-bell fs-3 text-primary mb-2"></i>
-                    <div class="stats-number" id="total-alerts">0</div>
+                    <div class="stats-number" id="total-alerts-count">0</div>
                     <div>Total Alerts</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="dashboard-card stats-card">
-                    <i class="bi bi-box fs-3 text-primary mb-2"></i>
-                    <div class="stats-number" id="objects-detected">0</div>
-                    <div>Objects Detected</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="dashboard-card stats-card">
-                    <i class="bi bi-person fs-3 text-primary mb-2"></i>
-                    <div class="stats-number" id="faces-detected">0</div>
-                    <div>Faces Detected</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="dashboard-card stats-card">
-                    <i class="bi bi-activity fs-3 text-primary mb-2"></i>
-                    <div class="stats-number" id="actions-detected">0</div>
-                    <div>Actions Detected</div>
                 </div>
             </div>
         </div>
@@ -237,9 +191,9 @@
                 <div class="dashboard-card">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h3 class="m-0">Recent Alerts</h3>
-                        <button class="btn btn-outline-primary btn-sm">View All</button>
+                        <a href="/alerts.html" class="btn btn-outline-primary btn-sm">View All</a>
                     </div>
-                    <div id="alerts" class="mt-3"></div>
+                    <div id="alerts-list" class="mt-3"></div>
                 </div>
             </div>
             
@@ -251,91 +205,235 @@
                         <h5>Connection Status</h5>
                         <p id="system-status">Waiting for connection...</p>
                     </div>
-                    <button class="btn btn-primary w-100" onclick="connectSocket()">
-                        <i class="bi bi-power me-2"></i>Connect to Server
-                    </button>
+                    <div class="mt-3">
+                        <h5>Detection Status</h5>
+                        <div id="detection-status" class="status-badge bg-secondary">
+                            <i class="bi bi-eye-slash me-2"></i>Detection Inactive
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
+        // Load shared navigation
+        $(function(){
+            $("#nav-placeholder").load("/shared/nav.html", function() {
+                console.log("Navigation loaded, initializing WebSocket...");
+                // Initialize WebSocket after nav is loaded
+                initializeWebSocket();
+            });
+        });
+
         let socket;
-        let alertCount = 0;
-        let objectsCount = 0;
-        let facesCount = 0;
-        let actionsCount = 0;
-
-        function connectSocket() {
-            socket = io("http://localhost:3000");
-
-            socket.on("connect", () => {
-                console.log("✅ Connected to WebSocket Server");
-                updateConnectionStatus(true);
-                document.getElementById('system-status').innerHTML = 'System is active and monitoring';
-            });
-
-            socket.on("alert", (alertData) => {
-                displayAlert(alertData);
-                updateStats();
-            });
-
-            socket.on("disconnect", () => {
-                console.log("❌ WebSocket Disconnected");
-                updateConnectionStatus(false);
-                document.getElementById('system-status').innerHTML = 'System is disconnected';
-            });
-        }
+        let priorityCounts = {
+            high: 0,
+            medium: 0,
+            low: 0,
+            total: 0
+        };
 
         function updateConnectionStatus(connected) {
+            console.log('Updating connection status:', connected);
             const statusElement = document.getElementById('connection-status');
-            if (connected) {
-                statusElement.className = 'connection-status connected';
-                statusElement.textContent = 'Connected';
-            } else {
-                statusElement.className = 'connection-status disconnected';
-                statusElement.textContent = 'Disconnected';
+            const systemStatus = document.getElementById('system-status');
+            
+            if (statusElement) {
+                statusElement.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
+                statusElement.textContent = connected ? 'Connected' : 'Disconnected';
+            }
+
+            if (systemStatus) {
+                systemStatus.innerHTML = connected ? 
+                    '<i class="bi bi-check-circle text-success"></i> System is active and monitoring' : 
+                    '<i class="bi bi-x-circle text-danger"></i> System is disconnected';
+            }
+
+            // Update the nav connection status as well
+            if (window.updateNavConnectionStatus) {
+                window.updateNavConnectionStatus(connected);
+            }
+        }
+
+        function initializeWebSocket() {
+            console.log("Starting WebSocket initialization...");
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.error('No authentication token found');
+                updateConnectionStatus(false);
+                return;
+            }
+
+            try {
+                // Close existing socket if any
+                if (socket) {
+                    socket.close();
+                }
+
+                console.log("Creating new socket connection...");
+                socket = io("http://localhost:3000", {
+                    auth: {
+                        token: token
+                    },
+                    reconnection: true,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 1000
+                });
+
+                socket.on("connect", () => {
+                    console.log("✅ Connected to WebSocket Server");
+                    updateConnectionStatus(true);
+                });
+
+                socket.on("connect_error", (error) => {
+                    console.error("Connection error:", error);
+                    updateConnectionStatus(false);
+                });
+
+                socket.on("alert", (alertData) => {
+                    console.log("Received alert:", alertData);
+                    displayAlert(alertData);
+                    updatePriorityCounts(getSeverityByObjectType(alertData.objectType));
+                });
+
+                socket.on("disconnect", () => {
+                    console.log("❌ WebSocket Disconnected");
+                    updateConnectionStatus(false);
+                });
+
+                socket.on("auth_error", () => {
+                    console.log("Authentication error");
+                    updateConnectionStatus(false);
+                    logout();
+                });
+
+                // Load initial alerts
+                loadInitialAlerts();
+
+            } catch (error) {
+                console.error("Error initializing WebSocket:", error);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function getSeverityByObjectType(objectType) {
+            if (!objectType) return 'medium';
+            
+            const highRiskObjects = ['Weapon', 'Knife', 'Gun'];
+            const mediumRiskObjects = ['Suspicious Package', 'Unknown Object'];
+            
+            objectType = objectType.toLowerCase();
+            
+            if (highRiskObjects.some(obj => objectType.includes(obj.toLowerCase()))) return 'high';
+            if (mediumRiskObjects.some(obj => objectType.includes(obj.toLowerCase()))) return 'medium';
+            return 'low';
+        }
+
+        function getSeverityColorByObjectType(objectType) {
+            const severity = getSeverityByObjectType(objectType);
+            switch(severity) {
+                case 'high': return 'danger';
+                case 'medium': return 'warning';
+                case 'low': return 'info';
+                default: return 'secondary';
             }
         }
 
         function displayAlert(alert) {
             const alertBox = document.createElement("div");
-            alertBox.className = "alert-item";
+            const severity = getSeverityByObjectType(alert.objectType);
+            alertBox.className = `alert-card ${severity}`;
             
-            const timestamp = new Date().toLocaleTimeString();
+            const timestamp = new Date(alert.timestamp || alert.createdAt).toLocaleString();
+            const alertMessage = alert.objectType 
+                ? `${alert.objectType} Detected`
+                : 'Unknown Object Detected';
             
             alertBox.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <strong>${alert.message}</strong>
-                    <span class="badge bg-secondary">${timestamp}</span>
-                </div>
-                <div class="text-muted mt-1">
-                    Location: ${alert.location || "Unknown"}
+                <div class="alert-header">
+                    <div>
+                        <div class="alert-title">
+                            <i class="bi bi-shield-exclamation"></i>
+                            ${alertMessage}
+                        </div>
+                        <div class="alert-meta">
+                            <span class="alert-location">
+                                <i class="bi bi-geo-alt"></i>
+                                ${alert.location || "Unknown Location"}
+                            </span>
+                            <span class="ms-2">
+                                <i class="bi bi-clock"></i>
+                                ${timestamp}
+                            </span>
+                        </div>
+                    </div>
+                    <span class="badge bg-${getSeverityColorByObjectType(alert.objectType)}">
+                        ${severity.toUpperCase()} PRIORITY
+                    </span>
                 </div>
             `;
             
-            const alertsContainer = document.getElementById("alerts");
-            alertsContainer.insertBefore(alertBox, alertsContainer.firstChild);
+            const alertsContainer = document.getElementById("alerts-list");
+            if (alertsContainer.children.length === 0) {
+                alertsContainer.appendChild(alertBox);
+            } else {
+                alertsContainer.insertBefore(alertBox, alertsContainer.firstChild);
+            }
             
-            if (alertsContainer.children.length > 10) {
+            // Keep only last 5 alerts in dashboard
+            if (alertsContainer.children.length > 5) {
                 alertsContainer.removeChild(alertsContainer.lastChild);
             }
         }
 
-        function updateStats() {
-            alertCount++;
-            objectsCount = Math.floor(alertCount * 1.5);
-            facesCount = Math.floor(alertCount * 0.8);
-            actionsCount = Math.floor(alertCount * 0.6);
-
-            document.getElementById('total-alerts').textContent = alertCount;
-            document.getElementById('objects-detected').textContent = objectsCount;
-            document.getElementById('faces-detected').textContent = facesCount;
-            document.getElementById('actions-detected').textContent = actionsCount;
+        function updatePriorityCounts(severity) {
+            priorityCounts[severity]++;
+            priorityCounts.total++;
+            
+            document.getElementById('high-priority-count').textContent = priorityCounts.high;
+            document.getElementById('medium-priority-count').textContent = priorityCounts.medium;
+            document.getElementById('low-priority-count').textContent = priorityCounts.low;
+            document.getElementById('total-alerts-count').textContent = priorityCounts.total;
         }
 
-        window.onload = connectSocket;
+        async function loadInitialAlerts() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/alerts?limit=5', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                
+                // Reset counts
+                priorityCounts = {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                    total: data.total || 0
+                };
+
+                // Display alerts and update counts
+                data.alerts.forEach(alert => {
+                    displayAlert(alert);
+                    const severity = getSeverityByObjectType(alert.objectType);
+                    priorityCounts[severity]++;
+                });
+
+                // Update count displays
+                document.getElementById('high-priority-count').textContent = priorityCounts.high;
+                document.getElementById('medium-priority-count').textContent = priorityCounts.medium;
+                document.getElementById('low-priority-count').textContent = priorityCounts.low;
+                document.getElementById('total-alerts-count').textContent = priorityCounts.total;
+
+            } catch (error) {
+                console.error('Error loading initial alerts:', error);
+            }
+        }
     </script>
 </body>
 </html>

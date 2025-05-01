@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Feed - Surveillance Dashboard</title>
+    <title>Live Feed - School Surveillance</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="/shared/styles.css">
+    <script src="/shared/auth.js"></script>
+    <script type="text/javascript" src="https://flashphoner.com/downloads/builds/flashphoner_client/wcs_api-2.0/current/flashphoner.js"></script>
     <style>
         .camera-container {
             background: white;
@@ -16,48 +18,45 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        .video-feed {
+        .video-wrapper {
+            position: relative;
             width: 100%;
-            max-width: 800px;
-            border-radius: 8px;
+            max-width: 1280px;
+            height: 720px;
             margin: 0 auto;
-            display: block;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
         }
 
-        .camera-controls {
-            margin-top: 20px;
-            text-align: center;
+        .fp-Video {
+            width: 100%;
+            height: 100%;
         }
 
-        .detection-box {
-            position: absolute;
-            border: 2px solid red;
-            background-color: rgba(255, 0, 0, 0.2);
-            pointer-events: none;
+        .display {
+            width: 100%;
+            height: 100%;
         }
 
-        .detection-label {
-            position: absolute;
-            background-color: red;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            top: -20px;
-            left: 0;
+        .display > video,
+        object {
+            width: 100%;
+            height: 100%;
         }
 
         #detectionCanvas {
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
         }
 
-        .video-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
+        .camera-controls {
+            margin-top: 20px;
+            text-align: center;
         }
 
         .detection-stats {
@@ -79,82 +78,210 @@
             justify-content: space-between;
             align-items: center;
         }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
     </style>
 </head>
-<body>
-    <!-- Include shared navigation -->
+<body onload="init_api()">
+    <script>
+        // Check authentication before loading page
+        if (!requireAuth()) {
+            throw new Error('Authentication required');
+        }
+    </script>
+
+    <!-- Load shared navigation -->
     <div id="nav-placeholder"></div>
 
     <!-- Main Content -->
-    <div class="main-content">
+    <main class="main-content">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="bi bi-camera-video me-2"></i>Live Feed</h2>
-            <span id="detection-status" class="status-badge bg-success">
-                <i class="bi bi-eye me-2"></i>Detection Active
-            </span>
+            <h1>Live Surveillance Feed</h1>
+            <div class="d-flex gap-3">
+                <div id="stream-status" class="status-badge bg-secondary">
+                    <i class="bi bi-circle-fill"></i>Stream Inactive
+                </div>
+                <div id="detection-status" class="status-badge bg-secondary">
+                    <i class="bi bi-eye-slash"></i>Detection Inactive
+                </div>
+            </div>
         </div>
 
-        <div class="row">
-            <div class="col-md-8">
-                <div class="camera-container">
-                    <div class="video-wrapper">
-                        <video id="videoFeed" class="video-feed" autoplay muted></video>
-                        <canvas id="detectionCanvas"></canvas>
-                    </div>
-                    <div class="camera-controls">
-                        <button class="btn btn-primary me-2" id="startCamera">
-                            <i class="bi bi-play-circle me-2"></i>Start Camera
-                        </button>
-                        <button class="btn btn-danger me-2" id="stopCamera">
-                            <i class="bi bi-stop-circle me-2"></i>Stop Camera
-                        </button>
-                        <button class="btn btn-success" id="toggleDetection">
-                            <i class="bi bi-eye me-2"></i>Toggle Detection
-                        </button>
-                    </div>
+        <div class="camera-container">
+            <div class="video-wrapper">
+                <div class="fp-Video">
+                    <div id="videoFeed" class="display"></div>
                 </div>
+                <canvas id="detectionCanvas"></canvas>
             </div>
-            <div class="col-md-4">
-                <div class="detection-stats">
-                    <h4><i class="bi bi-list-check me-2"></i>Recent Detections</h4>
-                    <div class="detection-list" id="detectionList">
-                        <!-- Detection items will be added here -->
-                    </div>
-                </div>
+            <div class="camera-controls">
+                <button class="btn btn-primary me-2" id="startCamera">
+                    <i class="bi bi-play-circle"></i> Start Stream
+                </button>
+                <button class="btn btn-danger me-2" id="stopCamera" style="display: none;">
+                    <i class="bi bi-stop-circle"></i> Stop Stream
+                </button>
+                <button class="btn btn-success" id="toggleDetection" disabled>
+                    <i class="bi bi-eye"></i> Toggle Detection
+                </button>
             </div>
         </div>
-    </div>
+
+        <div class="detection-stats">
+            <h4><i class="bi bi-list-check"></i> Recent Detections</h4>
+            <div class="detection-list" id="detectionList">
+                <!-- Detection items will be added here -->
+            </div>
+        </div>
+    </main>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
-        // Load shared navigation
-        $(function(){
-            $("#nav-placeholder").load("/shared/nav.html", function() {
-                if (socket && socket.connected) {
-                    window.updateNavConnectionStatus(true);
-                }
-            });
-        });
+        // Flashphoner constants
+        var SESSION_STATUS = Flashphoner.constants.SESSION_STATUS;
+        var STREAM_STATUS = Flashphoner.constants.STREAM_STATUS;
+        var session;
+        var stream;
+        var PRELOADER_URL = "https://github.com/flashphoner/flashphoner_client/raw/wcs_api-2.0/examples/demo/dependencies/media/preloader.mp4";
 
+        // Detection variables
         let socket;
-        let video;
         let model;
         let isDetecting = false;
         let detectionInterval;
 
-        // Connect to WebSocket
-        function connectSocket() {
-            socket = io("http://localhost:3000");
+        // Load shared navigation
+        $(function(){
+            $("#nav-placeholder").load("/shared/nav.html", function() {
+                initializeWebSocket();
+                setupNavigationHandlers();
+            });
+        });
+
+        function init_api() {
+            Flashphoner.init({});
             
+            session = Flashphoner.createSession({
+                urlServer: "wss://demo.flashphoner.com:8443"
+            }).on(SESSION_STATUS.ESTABLISHED, function(session) {
+                console.log("Connection ESTABLISHED");
+                updateStreamStatus("Connected to streaming server", "success");
+            }).on(SESSION_STATUS.DISCONNECTED, function() {
+                console.log("Connection DISCONNECTED");
+                updateStreamStatus("Disconnected from server", "danger");
+            }).on(SESSION_STATUS.FAILED, function() {
+                console.log("Connection FAILED");
+                updateStreamStatus("Connection failed", "danger");
+            });
+
+            document.getElementById('startCamera').onclick = startStream;
+            document.getElementById('stopCamera').onclick = stopStream;
+            document.getElementById('toggleDetection').onclick = toggleDetection;
+        }
+
+        function updateStreamStatus(message, type) {
+            const statusEl = document.getElementById('stream-status');
+            statusEl.className = `status-badge bg-${type}`;
+            statusEl.innerHTML = `<i class="bi bi-circle-fill"></i>${message}`;
+        }
+
+        function toggleControls(isPlaying) {
+            document.getElementById('startCamera').style.display = isPlaying ? 'none' : 'inline-block';
+            document.getElementById('stopCamera').style.display = isPlaying ? 'inline-block' : 'none';
+        }
+
+        function startStream() {
+            if (Browser.isSafari()) {
+                Flashphoner.playFirstVideo(document.getElementById("videoFeed"), true, PRELOADER_URL).then(function() {
+                    playStream();
+                });
+            } else {
+                playStream();
+            }
+        }
+
+        function playStream() {
+            if (stream) {
+                stream.stop();
+            }
+
+            stream = session.createStream({
+                name: "rtsp://admin:akilicamera@154.70.45.143:554/mode=real&idc=1&ids=1",
+                display: document.getElementById("videoFeed")
+            }).on(STREAM_STATUS.PENDING, function(stream) {
+                updateStreamStatus("Stream connecting...", "warning");
+            }).on(STREAM_STATUS.PLAYING, function(stream) {
+                updateStreamStatus("Stream active", "success");
+                toggleControls(true);
+                document.getElementById('toggleDetection').disabled = false;
+            }).on(STREAM_STATUS.STOPPED, function() {
+                updateStreamStatus("Stream stopped", "secondary");
+                toggleControls(false);
+                stopDetection();
+                document.getElementById('toggleDetection').disabled = true;
+            }).on(STREAM_STATUS.FAILED, function(stream) {
+                updateStreamStatus("Stream failed: " + stream.getInfo(), "danger");
+                toggleControls(false);
+                stopDetection();
+                document.getElementById('toggleDetection').disabled = true;
+            });
+
+            stream.play();
+        }
+
+        function stopStream() {
+            if (stream) {
+                stream.stop();
+            }
+        }
+
+        // Browser detection
+        var Browser = {
+            isSafari: function() {
+                return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            },
+        }
+
+        function setupNavigationHandlers() {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', async (e) => {
+                    if (stream) {
+                        e.preventDefault();
+                        stopStream();
+                        window.location.href = link.href;
+                    }
+                });
+            });
+        }
+
+        function initializeWebSocket() {
+            const token = localStorage.getItem('token');
+            socket = io("http://localhost:3000", {
+                auth: {
+                    token: token
+                }
+            });
+
             socket.on("connect", () => {
-                window.updateNavConnectionStatus(true);
+                updateNavConnectionStatus(true);
             });
 
             socket.on("disconnect", () => {
-                window.updateNavConnectionStatus(false);
+                updateNavConnectionStatus(false);
+            });
+
+            socket.on("auth_error", () => {
+                logout();
             });
         }
 
@@ -162,53 +289,22 @@
             try {
                 model = await cocoSsd.load();
                 console.log('Model loaded successfully');
-                document.getElementById('toggleDetection').disabled = false;
             } catch (error) {
                 console.error('Error loading model:', error);
             }
         }
 
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: 800,
-                        height: 600,
-                        facingMode: 'environment' 
-                    } 
-                });
-                video = document.getElementById('videoFeed');
-                video.srcObject = stream;
-                
-                // Set up canvas
-                const canvas = document.getElementById('detectionCanvas');
-                canvas.width = video.width;
-                canvas.height = video.height;
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-            }
-        }
-
-        function stopCamera() {
-            const video = document.getElementById('videoFeed');
-            const stream = video.srcObject;
-            if (stream) {
-                const tracks = stream.getTracks();
-                tracks.forEach(track => track.stop());
-                video.srcObject = null;
-            }
-            stopDetection();
-        }
-
         async function detect() {
-            if (!model || !video || !isDetecting) return;
+            if (!model || !isDetecting) return;
 
             try {
+                const video = document.getElementById('videoFeed').querySelector('video');
+                if (!video) return;
+
                 const predictions = await model.detect(video);
                 drawDetections(predictions);
                 updateDetectionList(predictions);
 
-                // Send detections to server
                 if (predictions.length > 0) {
                     predictions.forEach(pred => {
                         socket.emit('detection', {
@@ -227,22 +323,33 @@
         function drawDetections(predictions) {
             const canvas = document.getElementById('detectionCanvas');
             const ctx = canvas.getContext('2d');
+            const video = document.getElementById('videoFeed').querySelector('video');
+            
+            // Set canvas size to match video
+            canvas.width = video.clientWidth;
+            canvas.height = video.clientHeight;
+            
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             predictions.forEach(prediction => {
+                // Scale bounding box to canvas size
+                const x = (prediction.bbox[0] / video.videoWidth) * canvas.width;
+                const y = (prediction.bbox[1] / video.videoHeight) * canvas.height;
+                const width = (prediction.bbox[2] / video.videoWidth) * canvas.width;
+                const height = (prediction.bbox[3] / video.videoHeight) * canvas.height;
+
                 // Draw bounding box
                 ctx.strokeStyle = 'red';
                 ctx.lineWidth = 2;
-                ctx.strokeRect(...prediction.bbox);
+                ctx.strokeRect(x, y, width, height);
 
                 // Draw label
                 ctx.fillStyle = 'red';
-                ctx.fillRect(prediction.bbox[0], prediction.bbox[1] - 20, 
-                    prediction.class.length * 8 + 20, 20);
+                ctx.fillRect(x, y - 20, prediction.class.length * 8 + 20, 20);
                 ctx.fillStyle = 'white';
                 ctx.fillText(
                     `${prediction.class} ${Math.round(prediction.score * 100)}%`,
-                    prediction.bbox[0] + 5, prediction.bbox[1] - 5
+                    x + 5, y - 5
                 );
             });
         }
@@ -268,11 +375,20 @@
             });
         }
 
+        function toggleDetection() {
+            if (isDetecting) {
+                stopDetection();
+            } else {
+                startDetection();
+            }
+        }
+
         function startDetection() {
             isDetecting = true;
             detectionInterval = setInterval(detect, 100);
             document.getElementById('detection-status').className = 'status-badge bg-success';
-            document.getElementById('detection-status').innerHTML = '<i class="bi bi-eye me-2"></i>Detection Active';
+            document.getElementById('detection-status').innerHTML = '<i class="bi bi-eye"></i>Detection Active';
+            document.getElementById('toggleDetection').innerHTML = '<i class="bi bi-eye-slash"></i> Stop Detection';
         }
 
         function stopDetection() {
@@ -281,26 +397,22 @@
                 clearInterval(detectionInterval);
             }
             document.getElementById('detection-status').className = 'status-badge bg-secondary';
-            document.getElementById('detection-status').innerHTML = '<i class="bi bi-eye-slash me-2"></i>Detection Inactive';
+            document.getElementById('detection-status').innerHTML = '<i class="bi bi-eye-slash"></i>Detection Inactive';
+            document.getElementById('toggleDetection').innerHTML = '<i class="bi bi-eye"></i> Start Detection';
         }
-
-        // Event Listeners
-        document.getElementById('startCamera').addEventListener('click', startCamera);
-        document.getElementById('stopCamera').addEventListener('click', stopCamera);
-        document.getElementById('toggleDetection').addEventListener('click', () => {
-            if (isDetecting) {
-                stopDetection();
-            } else {
-                startDetection();
-            }
-        });
 
         // Initialize
         window.onload = async () => {
-            connectSocket();
             await loadModel();
-            document.getElementById('toggleDetection').disabled = true;
         };
+
+        // Cleanup on page unload
+        window.addEventListener('unload', () => {
+            stopStream();
+            if (socket) {
+                socket.disconnect();
+            }
+        });
     </script>
 </body>
 </html> 

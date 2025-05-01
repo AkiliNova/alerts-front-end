@@ -1,3 +1,6 @@
+<!-- Add script in head -->
+<script src="/shared/auth.js"></script>
+
 <!-- Sidebar Navigation -->
 <nav class="sidebar">
     <div class="px-4 mb-4">
@@ -13,7 +16,13 @@
         <li class="nav-item">
             <a class="nav-link" href="/live-feed.html" id="nav-live">
                 <i class="bi bi-camera-video"></i>
-                Live Feed
+                ML live feed
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="/rtsp-player.html" id="nav-live">
+                <i class="bi bi-camera-video"></i>
+                RTSP live feed
             </a>
         </li>
         <li class="nav-item">
@@ -25,19 +34,31 @@
         <li class="nav-item">
             <a class="nav-link" href="#" id="nav-face">
                 <i class="bi bi-people"></i>
-                Face Detection
+                Schools
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link" href="#" id="nav-object">
                 <i class="bi bi-box"></i>
-                Object Detection
+                Shool zones
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="#" id="nav-object">
+                <i class="bi bi-box"></i>
+                Device Management
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link" href="#" id="nav-settings">
                 <i class="bi bi-gear"></i>
                 Settings
+            </a>
+        </li>
+        <li class="nav-item mt-auto">
+            <a class="nav-link text-danger" href="#" onclick="logout(); return false;" id="nav-logout">
+                <i class="bi bi-box-arrow-right"></i>
+                Logout
             </a>
         </li>
     </ul>
@@ -52,13 +73,21 @@
         <div class="user-avatar">
             <i class="bi bi-person"></i>
         </div>
-        <span>Admin User</span>
+        <span id="user-email">Loading...</span>
     </div>
 </nav>
 
 <script>
+    console.log('Navigation script starting...');
+
+    // Ensure auth.js is loaded
+    if (typeof logout === 'undefined') {
+        console.error('Auth.js not loaded properly!');
+    }
+
     // Set active nav item based on current page
     function setActiveNav() {
+        console.log('Setting active nav item...');
         const path = window.location.pathname;
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
         
@@ -73,6 +102,7 @@
 
     // Add global function to update connection status
     window.updateNavConnectionStatus = function(connected) {
+        console.log('Updating connection status:', connected);
         const statusElement = document.getElementById('connection-status');
         if (statusElement) {
             statusElement.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
@@ -80,6 +110,85 @@
         }
     };
 
-    // Call when DOM is loaded
-    document.addEventListener('DOMContentLoaded', setActiveNav);
+    // Display user email from token
+    function displayUserEmail() {
+        console.log('Starting displayUserEmail function...');
+        const token = localStorage.getItem('token');
+        const userEmailElement = document.getElementById('user-email');
+        
+        console.log('Token from localStorage:', token ? 'exists' : 'not found');
+        console.log('UserEmailElement:', userEmailElement ? 'found' : 'not found');
+        
+        if (!userEmailElement) {
+            console.log('User email element not found in DOM');
+            return;
+        }
+        
+        if (!token) {
+            console.log('No token found, setting text to "Not logged in"');
+            userEmailElement.textContent = 'Not logged in';
+            return;
+        }
+
+        try {
+            console.log('Raw token:', token);
+            const [header, payload, signature] = token.split('.');
+            console.log('Token parts:', {
+                header: atob(header),
+                payload: atob(payload)
+            });
+            
+            const decodedPayload = JSON.parse(atob(payload));
+            console.log('Decoded token payload:', decodedPayload);
+            
+            if (decodedPayload.email) {
+                console.log('Email found in token:', decodedPayload.email);
+                userEmailElement.textContent = decodedPayload.email;
+            } else {
+                console.log('No email in token payload, fetching from server...');
+                fetch('/auth/verify', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => {
+                    console.log('Server response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Server response data:', data);
+                    if (data.email) {
+                        console.log('Email found in server response:', data.email);
+                        userEmailElement.textContent = data.email;
+                    } else {
+                        console.log('No email in server response, using default "User"');
+                        userEmailElement.textContent = 'User';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching user info:', error);
+                    userEmailElement.textContent = 'User';
+                });
+            }
+        } catch (error) {
+            console.error('Error processing token:', error);
+            console.error('Token that caused error:', token);
+            userEmailElement.textContent = 'User';
+        }
+    }
+
+    // Immediate execution
+    console.log('Setting up DOM content loaded handler...');
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM content loaded event fired');
+        setActiveNav();
+        displayUserEmail();
+    });
+
+    // Also try immediate execution in case the DOM is already loaded
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        console.log('Document already ready, executing immediately');
+        setActiveNav();
+        displayUserEmail();
+    }
 </script> 

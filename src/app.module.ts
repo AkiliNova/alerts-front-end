@@ -8,16 +8,18 @@ import { ObjectDetectionModule } from './modules/object-detection/object-detecti
 import { FaceDetectionModule } from './modules/face-detection/face-detection.module';
 import { HumanActionsModule } from './modules/human-actions/human-actions.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { RabbitMQModule } from './modules/rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017'),
+    MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/school-surveillance'),
     AlertsModule,
     ObjectDetectionModule,
     FaceDetectionModule,
     HumanActionsModule,
     AuthModule,
+    RabbitMQModule,
   ],
   controllers: [AppController],
   providers: [AppService],
