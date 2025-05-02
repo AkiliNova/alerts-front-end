@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw Detections - School Surveillance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="/shared/styles.css">
+    <script src="/shared/auth.js"></script>
+    <style>
+        .detection-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .detection-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .detection-meta {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .detection-source {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .detection-list {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .filters {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .confidence-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .confidence-high {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-low {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .bbox-visual {
+            width: 100px;
+            height: 60px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            position: relative;
+            margin-top: 5px;
+        }
+
+        .bbox-rect {
+            position: absolute;
+            border: 2px solid #3498db;
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+
+        .pagination-info {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+
+        .no-detections {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .detection-item {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+        }
+
+        .detection-item:last-child {
+            border-bottom: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .ai-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stats-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        .stats-number {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2563eb;
+            margin: 0.5rem 0;
+        }
+        .stats-label {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        .anomaly-badge {
+            background: #ef4444;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+        }
+        .ai-tag {
+            background: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+        }
+        .chart-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+            height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        if (!requireAuth()) {
+            throw new Error('Authentication required');
+        }
+    </script>
+
+    <!-- Load shared navigation -->
+    <div id="nav-placeholder"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading" id="loadingOverlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-camera me-2"></i>Raw Detections</h2>
+            <div class="d-flex gap-3">
+                <div class="badge bg-primary">
+                    <i class="bi bi-robot me-1"></i>AI Enhanced
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Stats -->
+        <div class="ai-stats">
+            <div class="stats-card">
+                <i class="bi bi-camera-video fs-4 text-primary"></i>
+                <div class="stats-number" id="processedFrames">0</div>
+                <div class="stats-label">Processed Frames</div>
+            </div>
+            <div class="stats-card">
+                <i class="bi bi-eye fs-4 text-success"></i>
+                <div class="stats-number" id="totalDetections">0</div>
+                <div class="stats-label">Total Detections</div>
+            </div>
+            <div class="stats-card">
+                <i class="bi bi-graph-up fs-4 text-info"></i>
+                <div class="stats-number" id="avgConfidence">0%</div>
+                <div class="stats-label">Average Accuracy</div>
+            </div>
+            <div class="stats-card">
+                <i class="bi bi-check-circle fs-4 text-warning"></i>
+                <div class="stats-number" id="highConfidence">0%</div>
+                <div class="stats-label">High Confidence (>70%)</div>
+            </div>
+        </div>
+
+        <!-- Detection Distribution Chart -->
+        <div class="chart-container">
+            <h3 class="h5 mb-4">Detection Distribution by Object Type</h3>
+            <canvas id="detectionChart"></canvas>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Date Range</label>
+                    <input type="text" class="form-control" id="dateRange" placeholder="Select date range">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Source</label>
+                    <select class="form-select" id="sourceFilter">
+                        <option value="">All Sources</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Items per page</label>
+                    <select class="form-select" id="limitFilter">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="applyFilters()">
+                        <i class="bi bi-funnel me-2"></i>Apply Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination Info -->
+        <div class="pagination-info d-flex justify-content-between align-items-center">
+            <span id="totalInfo">Loading...</span>
+            <div class="btn-group">
+                <button class="btn btn-outline-primary" id="prevPage" onclick="previousPage()" disabled>
+                    <i class="bi bi-chevron-left"></i> Previous
+                </button>
+                <button class="btn btn-outline-primary" id="nextPage" onclick="nextPage()" disabled>
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Detections List -->
+        <div class="detection-list" id="detectionsList">
+            <!-- Detections will be inserted here -->
+        </div>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        let sources = new Set();
+        let detectionChart = null;
+
+        // Initialize date picker
+        flatpickr("#dateRange", {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            maxDate: "today"
+        });
+
+        // Load shared navigation
+        $(function(){
+            $("#nav-placeholder").load("/shared/nav.html", function() {
+                loadDetections();
+            });
+        });
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.7) return 'confidence-high';
+            if (confidence >= 0.4) return 'confidence-medium';
+            return 'confidence-low';
+        }
+
+        function createBBoxVisual(bbox) {
+            const [x, y, width, height] = bbox;
+            const visualWidth = 100;
+            const visualHeight = 60;
+            
+            // Scale bbox coordinates to visual size
+            const scaledX = (x * visualWidth).toFixed(2);
+            const scaledY = (y * visualHeight).toFixed(2);
+            const scaledWidth = (width * visualWidth).toFixed(2);
+            const scaledHeight = (height * visualHeight).toFixed(2);
+
+            return `
+                <div class="bbox-visual">
+                    <div class="bbox-rect" style="
+                        left: ${scaledX}px;
+                        top: ${scaledY}px;
+                        width: ${scaledWidth}px;
+                        height: ${scaledHeight}px;">
+                    </div>
+                </div>
+            `;
+        }
+
+        function calculateAIStats(detections) {
+            const stats = {
+                totalFrames: new Set(detections.map(d => d.frame_id)).size,
+                totalDetections: detections.reduce((sum, d) => sum + d.detections.length, 0),
+                avgConfidence: 0,
+                highConfidenceCount: 0,
+                objectCounts: {}
+            };
+
+            let totalConfidence = 0;
+            let confidenceCount = 0;
+
+            detections.forEach(detection => {
+                detection.detections.forEach(d => {
+                    totalConfidence += d.confidence;
+                    confidenceCount++;
+                    if (d.confidence >= 0.7) stats.highConfidenceCount++;
+                    
+                    // Count detections by object type
+                    stats.objectCounts[d.class_name] = (stats.objectCounts[d.class_name] || 0) + 1;
+                });
+            });
+
+            stats.avgConfidence = confidenceCount > 0 ? totalConfidence / confidenceCount : 0;
+            stats.highConfidencePercentage = stats.totalDetections > 0 ? 
+                (stats.highConfidenceCount / stats.totalDetections) * 100 : 0;
+
+            return stats;
+        }
+
+        function updateChart(objectCounts) {
+            const ctx = document.getElementById('detectionChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (detectionChart) {
+                detectionChart.destroy();
+            }
+
+            // Sort data by count in descending order
+            const sortedData = Object.entries(objectCounts)
+                .sort(([,a], [,b]) => b - a)
+                .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+
+            detectionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(sortedData),
+                    datasets: [{
+                        label: 'Number of Detections',
+                        data: Object.values(sortedData),
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                        borderColor: 'rgba(37, 99, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function displayAIStats(detections) {
+            const stats = calculateAIStats(detections);
+            
+            document.getElementById('processedFrames').textContent = stats.totalFrames.toLocaleString();
+            document.getElementById('totalDetections').textContent = stats.totalDetections.toLocaleString();
+            document.getElementById('avgConfidence').textContent = `${(stats.avgConfidence * 100).toFixed(1)}%`;
+            document.getElementById('highConfidence').textContent = `${stats.highConfidencePercentage.toFixed(1)}%`;
+
+            // Update the chart with object type distribution
+            updateChart(stats.objectCounts);
+        }
+
+        function displayDetections(detections) {
+            const container = document.getElementById('detectionsList');
+            container.innerHTML = '';
+
+            if (detections.length === 0) {
+                container.innerHTML = `
+                    <div class="no-detections">
+                        <i class="bi bi-camera-video-off fs-1 d-block mb-3"></i>
+                        <h4>No detections found</h4>
+                        <p class="text-muted">Try adjusting your filters or selecting a different date range</p>
+                    </div>
+                `;
+                return;
+            }
+
+            detections.forEach(detection => {
+                sources.add(detection.source);
+                const isAnomaly = detection.detections.some(d => d.isAnomaly);
+
+                const card = document.createElement('div');
+                card.className = `detection-card ${isAnomaly ? 'anomaly' : ''}`;
+                card.style.position = 'relative';
+                
+                if (isAnomaly) {
+                    card.innerHTML += `
+                        <div class="anomaly-badge">
+                            <i class="bi bi-exclamation-triangle-fill"></i> Anomaly Detected
+                        </div>
+                    `;
+                }
+
+                let detectionsHtml = '';
+                detection.detections.forEach(d => {
+                    const aiTags = [];
+                    if (d.isAnomaly) aiTags.push('<span class="ai-tag anomaly">Anomaly</span>');
+                    if (d.aiClassification) aiTags.push(`<span class="ai-tag">${d.aiClassification}</span>`);
+
+                    detectionsHtml += `
+                        <div class="detection-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>${d.class_name}</strong>
+                                    <span class="confidence-badge ${getConfidenceClass(d.confidence)}">
+                                        ${(d.confidence * 100).toFixed(1)}%
+                                    </span>
+                                    <div class="detection-meta">
+                                        Class ID: ${d.class_id}
+                                    </div>
+                                    ${aiTags.length > 0 ? `
+                                        <div class="ai-analysis">
+                                            ${aiTags.join(' ')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                ${createBBoxVisual(d.bbox)}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                card.innerHTML += `
+                    <div class="detection-header">
+                        <div>
+                            <h5 class="mb-1">Frame ID: ${detection.frame_id}</h5>
+                            <div class="detection-meta">
+                                <span class="detection-source">
+                                    <i class="bi bi-camera-video"></i>
+                                    ${detection.source}
+                                </span>
+                                <span class="ms-2">
+                                    <i class="bi bi-clock"></i>
+                                    ${new Date(detection.timestamp).toLocaleString()}
+                                </span>
+                            </div>
+                        </div>
+                        <span class="badge bg-primary">
+                            ${detection.detections.length} Detection${detection.detections.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
+                    <div class="detection-items">
+                        ${detectionsHtml}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            updateSourceFilter();
+        }
+
+        function updateSourceFilter() {
+            const sourceFilter = document.getElementById('sourceFilter');
+            const currentValue = sourceFilter.value;
+            
+            // Clear existing options except the first one
+            while (sourceFilter.options.length > 1) {
+                sourceFilter.remove(1);
+            }
+
+            // Add new options
+            sources.forEach(source => {
+                const option = new Option(source, source);
+                sourceFilter.add(option);
+            });
+
+            // Restore selected value if it exists
+            if (currentValue && sources.has(currentValue)) {
+                sourceFilter.value = currentValue;
+            }
+        }
+
+        function updatePagination(total, page, pages) {
+            currentPage = page;
+            totalPages = pages;
+
+            document.getElementById('totalInfo').textContent = 
+                `Showing page ${page} of ${pages} (${total} total detections)`;
+            
+            document.getElementById('prevPage').disabled = page <= 1;
+            document.getElementById('nextPage').disabled = page >= pages;
+        }
+
+        async function loadDetections() {
+            showLoading();
+
+            try {
+                const limit = document.getElementById('limitFilter').value;
+                const dateRange = document.getElementById('dateRange').value;
+                let [startDate, endDate] = dateRange.split(' to ');
+
+                const queryParams = new URLSearchParams({
+                    page: currentPage.toString(),
+                    limit: limit
+                });
+
+                if (startDate) queryParams.append('startDate', startDate);
+                if (endDate) queryParams.append('endDate', endDate);
+
+                const response = await fetch(`/raw-detections?${queryParams}`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch detections');
+                }
+
+                const data = await response.json();
+                displayDetections(data.data);
+                displayAIStats(data.data);
+                updatePagination(data.total, data.page, data.pages);
+
+            } catch (error) {
+                console.error('Error loading detections:', error);
+                document.getElementById('detectionsList').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load detections. Please try again later.
+                    </div>
+                `;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function applyFilters() {
+            currentPage = 1;
+            loadDetections();
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadDetections();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadDetections();
+            }
+        }
+
+        // Handle navigation away from page
+        window.addEventListener('beforeunload', () => {
+            // Any cleanup if needed
+        });
+    </script>
+</body>
+</html> 

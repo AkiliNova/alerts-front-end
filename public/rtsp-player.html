@@ -9,31 +9,117 @@
         <link rel="stylesheet" href="/shared/styles.css">
         <script src="/shared/auth.js"></script>
         <script type="text/javascript" src="https://flashphoner.com/downloads/builds/flashphoner_client/wcs_api-2.0/current/flashphoner.js"></script>
-        <script type="text/javascript" src="/js/rtsp-player.js"></script>
         <style>
-            .fp-Video {
-                border: 1px solid #ddd;
-                width: 100%;
-                max-width: 1280px;
-                height: 720px;
+            .camera-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
                 margin: 0 auto;
-                border-radius: 8px;
-                overflow: hidden;
+                padding: 10px;
+                max-width: 100%;
+                height: calc(100vh - 120px);
             }
+
+            .camera-container {
+                background: white;
+                border-radius: 6px;
+                padding: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+            }
+
+            .video-wrapper {
+                position: relative;
+                flex: 1;
+                min-height: 0;
+                border-radius: 4px;
+                overflow: hidden;
+                background: #000;
+            }
+
+            .fp-Video {
+                width: 100%;
+                height: 100%;
+            }
+
             .display {
                 width: 100%;
                 height: 100%;
-                display: inline-block;
-                background: #000;
             }
+
             .display > video,
             object {
                 width: 100%;
                 height: 100%;
+                object-fit: cover;
             }
-            .controls {
-                margin-top: 20px;
+
+            .camera-controls {
+                margin-top: 8px;
                 text-align: center;
+            }
+
+            .status-badge {
+                padding: 4px 8px;
+                border-radius: 12px;
+                color: white;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 0.75rem;
+            }
+
+            .camera-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+
+            .camera-title {
+                font-size: 0.875rem;
+                font-weight: 600;
+                margin: 0;
+            }
+
+            .btn {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            .main-content {
+                padding: 10px;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .header {
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+
+            @media (max-width: 1200px) {
+                .camera-grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+
+            @media (max-width: 768px) {
+                .camera-grid {
+                    grid-template-columns: 1fr;
+                    height: auto;
+                }
+
+                .video-wrapper {
+                    aspect-ratio: 16/9;
+                }
+
+                .camera-container {
+                    height: auto;
+                }
             }
         </style>
     </head>
@@ -43,39 +129,192 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2><i class="bi bi-camera-video me-2"></i>Live RTSP Stream</h2>
-                <div id="stream-status" class="status-badge bg-secondary">
-                    <i class="bi bi-circle-fill me-2"></i>Stream Inactive
+            <div class="header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0"><i class="bi bi-camera-video me-2"></i>Live RTSP Streams</h2>
+                <div id="global-stream-status" class="status-badge bg-secondary">
+                    <i class="bi bi-circle-fill me-2"></i>Streams Inactive
                 </div>
             </div>
 
-            <div class="camera-container">
-                <div class="fp-Video">
-                    <div id="play" class="display"></div>
-                </div>
-                <div class="controls">
-                    <button class="btn btn-primary" id="playBtn">
-                        <i class="bi bi-play-circle me-2"></i>Start Stream
-                    </button>
-                    <button class="btn btn-danger ms-2" id="stopBtn" style="display: none;">
-                        <i class="bi bi-stop-circle me-2"></i>Stop Stream
-                    </button>
-                </div>
+            <!-- Camera Grid -->
+            <div class="camera-grid" id="camera-grid">
+                <!-- Cameras will be added here dynamically -->
             </div>
         </main>
 
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script>
-            // Load shared navigation
-            $(function(){
-            $("#nav-placeholder").load("/shared/nav.html", function() {
-                // After nav is loaded, update its connection status if socket exists
-                if (socket && socket.connected) {
-                    window.updateNavConnectionStatus(true);
+            // Camera configuration
+            const cameras = [
+                {
+                    id: 'camera1',
+                    name: 'Main Entrance',
+                    rtspUrl: 'rtsp://admin:akilicamera@154.70.45.143:554/mode=real&idc=1&ids=2'
+                },
+                {
+                    id: 'camera2',
+                    name: 'Hallway',
+                    rtspUrl: 'rtsp://admin:akilicamera@154.70.45.143:554/mode=real&idc=2&ids=2'
+                },
+                {
+                    id: 'camera3',
+                    name: 'Parking Lot',
+                    rtspUrl: 'rtsp://admin:akilicamera@154.70.45.143:554/mode=real&idc=3&ids=2'
                 }
+            ];
+
+            // Flashphoner constants
+            var SESSION_STATUS = Flashphoner.constants.SESSION_STATUS;
+            var STREAM_STATUS = Flashphoner.constants.STREAM_STATUS;
+            var session;
+            var streams = {};
+            var PRELOADER_URL = "https://github.com/flashphoner/flashphoner_client/raw/wcs_api-2.0/examples/demo/dependencies/media/preloader.mp4";
+
+            function createCameraElement(camera) {
+                const cameraContainer = document.createElement('div');
+                cameraContainer.className = 'camera-container';
+                cameraContainer.innerHTML = `
+                    <div class="camera-header">
+                        <h3 class="camera-title">${camera.name}</h3>
+                        <div id="stream-status-${camera.id}" class="status-badge bg-secondary">
+                            <i class="bi bi-circle-fill"></i>Stream Inactive
+                        </div>
+                    </div>
+                    <div class="video-wrapper">
+                        <div class="fp-Video">
+                            <div id="videoFeed-${camera.id}" class="display"></div>
+                        </div>
+                    </div>
+                    <div class="camera-controls">
+                        <button class="btn btn-primary" id="startCamera-${camera.id}">
+                            <i class="bi bi-play-circle me-2"></i>Start Stream
+                        </button>
+                        <button class="btn btn-danger ms-2" id="stopCamera-${camera.id}" style="display: none;">
+                            <i class="bi bi-stop-circle me-2"></i>Stop Stream
+                        </button>
+                    </div>
+                `;
+                return cameraContainer;
+            }
+
+            function init_api() {
+                Flashphoner.init({});
+                
+                session = Flashphoner.createSession({
+                    urlServer: "wss://demo.flashphoner.com:8443"
+                }).on(SESSION_STATUS.ESTABLISHED, function(session) {
+                    console.log("Connection ESTABLISHED");
+                    updateGlobalStatus("Connected to streaming server", "success");
+                }).on(SESSION_STATUS.DISCONNECTED, function() {
+                    console.log("Connection DISCONNECTED");
+                    updateGlobalStatus("Disconnected from server", "danger");
+                }).on(SESSION_STATUS.FAILED, function() {
+                    console.log("Connection FAILED");
+                    updateGlobalStatus("Connection failed", "danger");
+                });
+
+                // Create camera elements and attach event handlers
+                const cameraGrid = document.getElementById('camera-grid');
+                cameras.forEach(camera => {
+                    cameraGrid.appendChild(createCameraElement(camera));
+                    
+                    document.getElementById(`startCamera-${camera.id}`).onclick = () => startStream(camera);
+                    document.getElementById(`stopCamera-${camera.id}`).onclick = () => stopStream(camera);
+                });
+            }
+
+            function updateGlobalStatus(message, type) {
+                const statusEl = document.getElementById('global-stream-status');
+                statusEl.className = `status-badge bg-${type}`;
+                statusEl.innerHTML = `<i class="bi bi-circle-fill me-2"></i>${message}`;
+            }
+
+            function updateStreamStatus(camera, message, type) {
+                const statusEl = document.getElementById(`stream-status-${camera.id}`);
+                statusEl.className = `status-badge bg-${type}`;
+                statusEl.innerHTML = `<i class="bi bi-circle-fill"></i>${message}`;
+            }
+
+            function toggleControls(camera, isPlaying) {
+                document.getElementById(`startCamera-${camera.id}`).style.display = isPlaying ? 'none' : 'inline-block';
+                document.getElementById(`stopCamera-${camera.id}`).style.display = isPlaying ? 'inline-block' : 'none';
+            }
+
+            function startStream(camera) {
+                if (Browser.isSafari()) {
+                    Flashphoner.playFirstVideo(document.getElementById(`videoFeed-${camera.id}`), true, PRELOADER_URL).then(() => {
+                        playStream(camera);
+                    });
+                } else {
+                    playStream(camera);
+                }
+            }
+
+            function playStream(camera) {
+                if (streams[camera.id]) {
+                    streams[camera.id].stop();
+                }
+
+                streams[camera.id] = session.createStream({
+                    name: camera.rtspUrl,
+                    display: document.getElementById(`videoFeed-${camera.id}`)
+                }).on(STREAM_STATUS.PENDING, function(stream) {
+                    updateStreamStatus(camera, "Stream connecting...", "warning");
+                }).on(STREAM_STATUS.PLAYING, function(stream) {
+                    updateStreamStatus(camera, "Stream active", "success");
+                    toggleControls(camera, true);
+                }).on(STREAM_STATUS.STOPPED, function() {
+                    updateStreamStatus(camera, "Stream stopped", "secondary");
+                    toggleControls(camera, false);
+                }).on(STREAM_STATUS.FAILED, function(stream) {
+                    updateStreamStatus(camera, "Stream failed", "danger");
+                    toggleControls(camera, false);
+                });
+
+                streams[camera.id].play();
+            }
+
+            function stopStream(camera) {
+                if (streams[camera.id]) {
+                    streams[camera.id].stop();
+                }
+            }
+
+            var Browser = {
+                isSafari: function() {
+                    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+                },
+            }
+
+            function setupNavigationHandlers() {
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.addEventListener('click', async (e) => {
+                        const activeStreams = Object.values(streams).filter(stream => stream);
+                        if (activeStreams.length > 0) {
+                            e.preventDefault();
+                            activeStreams.forEach(stream => stream.stop());
+                            window.location.href = link.href;
+                        }
+                    });
+                });
+            }
+
+            // Initialize
+            $(function(){
+                $("#nav-placeholder").load("/shared/nav.html", function() {
+                    setupNavigationHandlers();
+                    if (socket && socket.connected) {
+                        window.updateNavConnectionStatus(true);
+                    }
+                });
             });
-        });
+
+            // Cleanup
+            window.addEventListener('unload', () => {
+                Object.values(streams).forEach(stream => {
+                    if (stream) stream.stop();
+                });
+            });
         </script>
     </body>
 </html> 

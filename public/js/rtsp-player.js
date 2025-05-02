@@ -51,6 +51,7 @@ function playClick() {
         Flashphoner.playFirstVideo(document.getElementById("play"), true, PRELOADER_URL).then(function() {
             playStream();
         });
+        
     } else {
         playStream();
     }
